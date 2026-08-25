@@ -1,83 +1,151 @@
-import Database from "better-sqlite3";
-import { join, dirname } from "path";
-import { fileURLToPath } from "url";
+// import Database from "better-sqlite3";
+// import { join, dirname } from "path";
+// import { fileURLToPath } from "url";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+// const __filename = fileURLToPath(import.meta.url);
+// const __dirname = dirname(__filename);
 
-const databasePath = join(__dirname, "..", "luong.db");
+// const databasePath = join(__dirname, "..", "luong.db");
 
-const db = new Database(databasePath);
+// const db = new Database(databasePath);
 
-db.pragma("foreign_keys = ON");
+// db.pragma("foreign_keys = ON");
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS employees (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL UNIQUE,
-    meso_hour REAL NOT NULL DEFAULT 7000000,
-    hourly_rate REAL NOT NULL DEFAULT 22000
+// db.exec(`
+//   CREATE TABLE IF NOT EXISTS employees (
+//     id INTEGER PRIMARY KEY AUTOINCREMENT,
+//     name TEXT NOT NULL UNIQUE,
+//     meso_hour REAL NOT NULL DEFAULT 7000000,
+//     hourly_rate REAL NOT NULL DEFAULT 22000
+//   );
+
+//   CREATE TABLE IF NOT EXISTS logs (
+//     id INTEGER PRIMARY KEY AUTOINCREMENT,
+//     employee_id INTEGER NOT NULL,
+//     work_date TEXT NOT NULL,
+//     shift TEXT NOT NULL,
+
+//     meso_start REAL NOT NULL,
+//     meso_end REAL NOT NULL,
+
+//     pot_start REAL NOT NULL DEFAULT 0,
+//     pot_end REAL NOT NULL DEFAULT 0,
+//     pot_price REAL NOT NULL DEFAULT 0,
+
+//     pink_pot_start REAL NOT NULL DEFAULT 0,
+//     pink_pot_end REAL NOT NULL DEFAULT 0,
+//     pink_pot_price REAL NOT NULL DEFAULT 0,
+
+//     purple_pot_start REAL NOT NULL DEFAULT 0,
+//     purple_pot_end REAL NOT NULL DEFAULT 0,
+//     purple_pot_price REAL NOT NULL DEFAULT 0,
+
+//     meso_hour REAL NOT NULL,
+//     hourly_rate REAL NOT NULL,
+//     is_paid INTEGER NOT NULL DEFAULT 0,
+//     paid_at TEXT,
+//     FOREIGN KEY (employee_id)
+//       REFERENCES employees(id)
+//   );
+// `);
+
+// function addColumnIfMissing(columnName, columnDefinition) {
+//   const columns = db.prepare("PRAGMA table_info(logs)").all();
+
+//   const exists = columns.some((column) => column.name === columnName);
+
+//   if (!exists) {
+//     db.exec(`
+//       ALTER TABLE logs
+//       ADD COLUMN ${columnName} ${columnDefinition}
+//     `);
+
+//     console.log(`Đã thêm cột: ${columnName}`);
+//   }
+// }
+
+// // Tự cập nhật database cũ để thêm Pot hồng.
+// addColumnIfMissing("pink_pot_start", "REAL NOT NULL DEFAULT 0");
+
+// addColumnIfMissing("pink_pot_end", "REAL NOT NULL DEFAULT 0");
+
+// addColumnIfMissing("pink_pot_price", "REAL NOT NULL DEFAULT 0");
+
+// // Tự cập nhật database cũ để thêm Pot tím.
+// addColumnIfMissing("purple_pot_start", "REAL NOT NULL DEFAULT 0");
+
+// addColumnIfMissing("purple_pot_end", "REAL NOT NULL DEFAULT 0");
+
+// addColumnIfMissing("purple_pot_price", "REAL NOT NULL DEFAULT 0");
+// addColumnIfMissing("is_paid", "INTEGER NOT NULL DEFAULT 0");
+
+// addColumnIfMissing("paid_at", "TEXT");
+// export default db;
+import pg from "pg";
+
+const { Pool } = pg;
+
+if (!process.env.DATABASE_URL) {
+  throw new Error(
+    "Thiếu DATABASE_URL. Kiểm tra Environment Variables hoặc file .env.",
   );
-
-  CREATE TABLE IF NOT EXISTS logs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    employee_id INTEGER NOT NULL,
-    work_date TEXT NOT NULL,
-    shift TEXT NOT NULL,
-
-    meso_start REAL NOT NULL,
-    meso_end REAL NOT NULL,
-
-    pot_start REAL NOT NULL DEFAULT 0,
-    pot_end REAL NOT NULL DEFAULT 0,
-    pot_price REAL NOT NULL DEFAULT 0,
-
-    pink_pot_start REAL NOT NULL DEFAULT 0,
-    pink_pot_end REAL NOT NULL DEFAULT 0,
-    pink_pot_price REAL NOT NULL DEFAULT 0,
-
-    purple_pot_start REAL NOT NULL DEFAULT 0,
-    purple_pot_end REAL NOT NULL DEFAULT 0,
-    purple_pot_price REAL NOT NULL DEFAULT 0,
-
-    meso_hour REAL NOT NULL,
-    hourly_rate REAL NOT NULL,
-    is_paid INTEGER NOT NULL DEFAULT 0,
-    paid_at TEXT,
-    FOREIGN KEY (employee_id)
-      REFERENCES employees(id)
-  );
-`);
-
-function addColumnIfMissing(columnName, columnDefinition) {
-  const columns = db.prepare("PRAGMA table_info(logs)").all();
-
-  const exists = columns.some((column) => column.name === columnName);
-
-  if (!exists) {
-    db.exec(`
-      ALTER TABLE logs
-      ADD COLUMN ${columnName} ${columnDefinition}
-    `);
-
-    console.log(`Đã thêm cột: ${columnName}`);
-  }
 }
 
-// Tự cập nhật database cũ để thêm Pot hồng.
-addColumnIfMissing("pink_pot_start", "REAL NOT NULL DEFAULT 0");
+const db = new Pool({
+  connectionString: process.env.DATABASE_URL,
 
-addColumnIfMissing("pink_pot_end", "REAL NOT NULL DEFAULT 0");
+  ssl: {
+    rejectUnauthorized: false,
+  },
+});
 
-addColumnIfMissing("pink_pot_price", "REAL NOT NULL DEFAULT 0");
+export async function initializeDatabase() {
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS employees (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      meso_hour DOUBLE PRECISION NOT NULL DEFAULT 7000000,
+      hourly_rate DOUBLE PRECISION NOT NULL DEFAULT 22000
+    );
+  `);
 
-// Tự cập nhật database cũ để thêm Pot tím.
-addColumnIfMissing("purple_pot_start", "REAL NOT NULL DEFAULT 0");
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS logs (
+      id SERIAL PRIMARY KEY,
 
-addColumnIfMissing("purple_pot_end", "REAL NOT NULL DEFAULT 0");
+      employee_id INTEGER NOT NULL,
+      work_date TEXT NOT NULL,
+      shift TEXT NOT NULL,
 
-addColumnIfMissing("purple_pot_price", "REAL NOT NULL DEFAULT 0");
-addColumnIfMissing("is_paid", "INTEGER NOT NULL DEFAULT 0");
+      meso_start DOUBLE PRECISION NOT NULL,
+      meso_end DOUBLE PRECISION NOT NULL,
 
-addColumnIfMissing("paid_at", "TEXT");
+      pot_start DOUBLE PRECISION NOT NULL DEFAULT 0,
+      pot_end DOUBLE PRECISION NOT NULL DEFAULT 0,
+      pot_price DOUBLE PRECISION NOT NULL DEFAULT 0,
+
+      pink_pot_start DOUBLE PRECISION NOT NULL DEFAULT 0,
+      pink_pot_end DOUBLE PRECISION NOT NULL DEFAULT 0,
+      pink_pot_price DOUBLE PRECISION NOT NULL DEFAULT 0,
+
+      purple_pot_start DOUBLE PRECISION NOT NULL DEFAULT 0,
+      purple_pot_end DOUBLE PRECISION NOT NULL DEFAULT 0,
+      purple_pot_price DOUBLE PRECISION NOT NULL DEFAULT 0,
+
+      meso_hour DOUBLE PRECISION NOT NULL,
+      hourly_rate DOUBLE PRECISION NOT NULL,
+
+      is_paid INTEGER NOT NULL DEFAULT 0,
+      paid_at TEXT,
+
+      CONSTRAINT logs_employee_id_fkey
+        FOREIGN KEY (employee_id)
+        REFERENCES employees(id)
+        ON DELETE CASCADE
+    );
+  `);
+
+  console.log("PostgreSQL đã sẵn sàng.");
+}
+
 export default db;
