@@ -6,6 +6,7 @@ import logsRouter from "./routes/logs.routes.js";
 
 // Import database để khởi tạo bảng và cập nhật cột mới.
 import "./database.js";
+const PORT = process.env.PORT || 5000;
 
 const app = express();
 
@@ -23,7 +24,6 @@ app.use("/api/employees", employeesRouter);
 
 app.use("/api/logs", logsRouter);
 
-app.listen(5000, "127.0.0.1", () => {
-  console.log("Node API đang chạy tại:");
-  console.log("http://127.0.0.1:5000");
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Node API đang chạy tại port: ${PORT}`);
 });
