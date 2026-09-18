@@ -1,151 +1,56 @@
-// import Database from "better-sqlite3";
-// import { join, dirname } from "path";
-// import { fileURLToPath } from "url";
+import { MongoClient } from "mongodb";
 
-// const __filename = fileURLToPath(import.meta.url);
-// const __dirname = dirname(__filename);
-
-// const databasePath = join(__dirname, "..", "luong.db");
-
-// const db = new Database(databasePath);
-
-// db.pragma("foreign_keys = ON");
-
-// db.exec(`
-//   CREATE TABLE IF NOT EXISTS employees (
-//     id INTEGER PRIMARY KEY AUTOINCREMENT,
-//     name TEXT NOT NULL UNIQUE,
-//     meso_hour REAL NOT NULL DEFAULT 7000000,
-//     hourly_rate REAL NOT NULL DEFAULT 22000
-//   );
-
-//   CREATE TABLE IF NOT EXISTS logs (
-//     id INTEGER PRIMARY KEY AUTOINCREMENT,
-//     employee_id INTEGER NOT NULL,
-//     work_date TEXT NOT NULL,
-//     shift TEXT NOT NULL,
-
-//     meso_start REAL NOT NULL,
-//     meso_end REAL NOT NULL,
-
-//     pot_start REAL NOT NULL DEFAULT 0,
-//     pot_end REAL NOT NULL DEFAULT 0,
-//     pot_price REAL NOT NULL DEFAULT 0,
-
-//     pink_pot_start REAL NOT NULL DEFAULT 0,
-//     pink_pot_end REAL NOT NULL DEFAULT 0,
-//     pink_pot_price REAL NOT NULL DEFAULT 0,
-
-//     purple_pot_start REAL NOT NULL DEFAULT 0,
-//     purple_pot_end REAL NOT NULL DEFAULT 0,
-//     purple_pot_price REAL NOT NULL DEFAULT 0,
-
-//     meso_hour REAL NOT NULL,
-//     hourly_rate REAL NOT NULL,
-//     is_paid INTEGER NOT NULL DEFAULT 0,
-//     paid_at TEXT,
-//     FOREIGN KEY (employee_id)
-//       REFERENCES employees(id)
-//   );
-// `);
-
-// function addColumnIfMissing(columnName, columnDefinition) {
-//   const columns = db.prepare("PRAGMA table_info(logs)").all();
-
-//   const exists = columns.some((column) => column.name === columnName);
-
-//   if (!exists) {
-//     db.exec(`
-//       ALTER TABLE logs
-//       ADD COLUMN ${columnName} ${columnDefinition}
-//     `);
-
-//     console.log(`Đã thêm cột: ${columnName}`);
-//   }
-// }
-
-// // Tự cập nhật database cũ để thêm Pot hồng.
-// addColumnIfMissing("pink_pot_start", "REAL NOT NULL DEFAULT 0");
-
-// addColumnIfMissing("pink_pot_end", "REAL NOT NULL DEFAULT 0");
-
-// addColumnIfMissing("pink_pot_price", "REAL NOT NULL DEFAULT 0");
-
-// // Tự cập nhật database cũ để thêm Pot tím.
-// addColumnIfMissing("purple_pot_start", "REAL NOT NULL DEFAULT 0");
-
-// addColumnIfMissing("purple_pot_end", "REAL NOT NULL DEFAULT 0");
-
-// addColumnIfMissing("purple_pot_price", "REAL NOT NULL DEFAULT 0");
-// addColumnIfMissing("is_paid", "INTEGER NOT NULL DEFAULT 0");
-
-// addColumnIfMissing("paid_at", "TEXT");
-// export default db;
-import pg from "pg";
-
-const { Pool } = pg;
-
-if (!process.env.DATABASE_URL) {
+if (!process.env.MONGODB_URI) {
   throw new Error(
-    "Thiếu DATABASE_URL. Kiểm tra Environment Variables hoặc file .env.",
+    "Thiếu MONGODB_URI. Kiểm tra Environment Variables hoặc file .env.",
   );
 }
 
-const db = new Pool({
-  connectionString: process.env.DATABASE_URL,
+const mongoClient = new MongoClient(process.env.MONGODB_URI);
 
-  ssl: {
-    rejectUnauthorized: false,
-  },
-});
+let db;
 
 export async function initializeDatabase() {
-  await db.query(`
-    CREATE TABLE IF NOT EXISTS employees (
-      id SERIAL PRIMARY KEY,
-      name TEXT NOT NULL UNIQUE,
-      meso_hour DOUBLE PRECISION NOT NULL DEFAULT 7000000,
-      hourly_rate DOUBLE PRECISION NOT NULL DEFAULT 22000
-    );
-  `);
+  await mongoClient.connect();
 
-  await db.query(`
-    CREATE TABLE IF NOT EXISTS logs (
-      id SERIAL PRIMARY KEY,
+  db = mongoClient.db(
+    process.env.MONGODB_DB_NAME || "luong",
+  );
 
-      employee_id INTEGER NOT NULL,
-      work_date TEXT NOT NULL,
-      shift TEXT NOT NULL,
+  const employees = db.collection("employees");
+  const logs = db.collection("logs");
 
-      meso_start DOUBLE PRECISION NOT NULL,
-      meso_end DOUBLE PRECISION NOT NULL,
+  await employees.createIndex(
+    { postgres_id: 1 },
+    { unique: true },
+  );
 
-      pot_start DOUBLE PRECISION NOT NULL DEFAULT 0,
-      pot_end DOUBLE PRECISION NOT NULL DEFAULT 0,
-      pot_price DOUBLE PRECISION NOT NULL DEFAULT 0,
+  await employees.createIndex(
+    { name: 1 },
+    { unique: true },
+  );
 
-      pink_pot_start DOUBLE PRECISION NOT NULL DEFAULT 0,
-      pink_pot_end DOUBLE PRECISION NOT NULL DEFAULT 0,
-      pink_pot_price DOUBLE PRECISION NOT NULL DEFAULT 0,
+  await logs.createIndex(
+    { postgres_id: 1 },
+    { unique: true },
+  );
 
-      purple_pot_start DOUBLE PRECISION NOT NULL DEFAULT 0,
-      purple_pot_end DOUBLE PRECISION NOT NULL DEFAULT 0,
-      purple_pot_price DOUBLE PRECISION NOT NULL DEFAULT 0,
+  await logs.createIndex({
+    employee_id: 1,
+    work_date: 1,
+  });
 
-      meso_hour DOUBLE PRECISION NOT NULL,
-      hourly_rate DOUBLE PRECISION NOT NULL,
-
-      is_paid INTEGER NOT NULL DEFAULT 0,
-      paid_at TEXT,
-
-      CONSTRAINT logs_employee_id_fkey
-        FOREIGN KEY (employee_id)
-        REFERENCES employees(id)
-        ON DELETE CASCADE
-    );
-  `);
-
-  console.log("PostgreSQL đã sẵn sàng.");
+  console.log("MongoDB đã sẵn sàng.");
 }
 
-export default db;
+export function getDb() {
+  if (!db) {
+    throw new Error(
+      "MongoDB chưa khởi tạo. Hãy gọi initializeDatabase() trước.",
+    );
+  }
+
+  return db;
+}
+
+export default mongoClient;

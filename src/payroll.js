@@ -11,46 +11,71 @@ export function toNumber(value) {
 /**
  * Công thức:
  *
- * Chênh lệch Pot = Pot cuối - Pot đầu
+ * Chênh lệch item = số cuối - số đầu
  *
- * Chênh lệch dương:
- * - Pot cuối nhiều hơn Pot đầu
+ * Số dương:
+ * - Số lượng cuối nhiều hơn đầu
  * - Cộng meso
  *
- * Chênh lệch âm:
- * - Pot cuối ít hơn Pot đầu
+ * Số âm:
+ * - Số lượng cuối ít hơn đầu
  * - Trừ meso
  */
 export function calculateSalary(log) {
-  const pinkPotChange = log.pink_pot_end - log.pink_pot_start;
+  const pinkPotChange =
+    toNumber(log.pink_pot_end ?? 0) -
+    toNumber(log.pink_pot_start ?? 0);
 
-  const purplePotChange = log.purple_pot_end - log.purple_pot_start;
+  const purplePotChange =
+    toNumber(log.purple_pot_end ?? 0) -
+    toNumber(log.purple_pot_start ?? 0);
 
-  const pinkPotMesoAdjustment = pinkPotChange * log.pink_pot_price;
+  const eelChange =
+    toNumber(log.eel_end ?? 0) -
+    toNumber(log.eel_start ?? 0);
 
-  const purplePotMesoAdjustment = purplePotChange * log.purple_pot_price;
+  const pinkPotMesoAdjustment =
+    pinkPotChange *
+    toNumber(log.pink_pot_price ?? 0);
+
+  const purplePotMesoAdjustment =
+    purplePotChange *
+    toNumber(log.purple_pot_price ?? 0);
+
+  const eelMesoAdjustment =
+    eelChange *
+    toNumber(log.eel_price ?? 0);
 
   const totalPotMesoAdjustment =
-    pinkPotMesoAdjustment + purplePotMesoAdjustment;
+    pinkPotMesoAdjustment +
+    purplePotMesoAdjustment +
+    eelMesoAdjustment;
 
-  const mesoNet = log.meso_end - log.meso_start + totalPotMesoAdjustment;
+  const mesoNet =
+    toNumber(log.meso_end) -
+    toNumber(log.meso_start) +
+    totalPotMesoAdjustment;
 
-  const hours = log.meso_hour > 0 ? mesoNet / log.meso_hour : 0;
+  const mesoPerHour = toNumber(log.meso_hour);
 
-  const salary = hours * log.hourly_rate;
+  const hours =
+    mesoPerHour > 0
+      ? mesoNet / mesoPerHour
+      : 0;
+
+  const salary =
+    hours * toNumber(log.hourly_rate);
 
   return {
     ...log,
 
-    // Số dương = Pot cuối lớn hơn đầu.
-    // Số âm = Pot cuối nhỏ hơn đầu.
     pink_pot_change: pinkPotChange,
     purple_pot_change: purplePotChange,
+    eel_change: eelChange,
 
-    // Số dương = cộng meso.
-    // Số âm = trừ meso.
     pink_pot_meso_adjustment: pinkPotMesoAdjustment,
     purple_pot_meso_adjustment: purplePotMesoAdjustment,
+    eel_meso_adjustment: eelMesoAdjustment,
 
     total_pot_meso_adjustment: totalPotMesoAdjustment,
 

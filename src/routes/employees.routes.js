@@ -1,160 +1,20 @@
-// import express from "express";
-// import db from "../database.js";
-// import { toNumber } from "../payroll.js";
-
-// const router = express.Router();
-
-// router.get("/", (request, response) => {
-//   const employees = db
-//     .prepare(
-//       `
-//       SELECT *
-//       FROM employees
-//       ORDER BY name
-//     `,
-//     )
-//     .all();
-
-//   response.json(employees);
-// });
-
-// router.post("/", (request, response) => {
-//   try {
-//     const { name, meso_hour, hourly_rate } = request.body;
-
-//     const employeeName = name?.trim();
-
-//     if (!employeeName) {
-//       throw new Error("Vui lòng nhập tên nhân viên.");
-//     }
-
-//     const mesoPerHour = toNumber(meso_hour);
-//     const hourlyRate = toNumber(hourly_rate);
-
-//     if (mesoPerHour <= 0) {
-//       throw new Error("Meso mỗi giờ phải lớn hơn 0.");
-//     }
-
-//     if (hourlyRate < 0) {
-//       throw new Error("Đơn giá giờ không được âm.");
-//     }
-
-//     const result = db
-//       .prepare(
-//         `
-//         INSERT INTO employees (
-//           name,
-//           meso_hour,
-//           hourly_rate
-//         )
-//         VALUES (?, ?, ?)
-//       `,
-//       )
-//       .run(employeeName, mesoPerHour, hourlyRate);
-
-//     response.status(201).json({
-//       ok: true,
-//       employee_id: result.lastInsertRowid,
-//       message: "Đã thêm nhân viên.",
-//     });
-//   } catch (error) {
-//     response.status(400).json({
-//       error: error.message,
-//     });
-//   }
-// });
-// router.patch("/:id", (request, response) => {
-//   try {
-//     const employeeId = Number(request.params.id);
-
-//     const { meso_hour, hourly_rate } = request.body;
-
-//     const mesoPerHour = toNumber(meso_hour);
-//     const hourlyRate = toNumber(hourly_rate);
-
-//     if (mesoPerHour <= 0) {
-//       throw new Error("KPI Meso/giờ phải lớn hơn 0.");
-//     }
-
-//     if (hourlyRate < 0) {
-//       throw new Error("Đơn giá giờ không được âm.");
-//     }
-
-//     const result = db
-//       .prepare(
-//         `
-//         UPDATE employees
-//         SET
-//           meso_hour = ?,
-//           hourly_rate = ?
-//         WHERE id = ?
-//       `,
-//       )
-//       .run(mesoPerHour, hourlyRate, employeeId);
-
-//     if (result.changes === 0) {
-//       return response.status(404).json({
-//         error: "Không tìm thấy nhân viên.",
-//       });
-//     }
-
-//     response.json({
-//       ok: true,
-//       message: "Đã cập nhật KPI Meso/giờ và đơn giá giờ.",
-//     });
-//   } catch (error) {
-//     response.status(400).json({
-//       error: error.message,
-//     });
-//   }
-// });
-// router.delete("/:id", (request, response) => {
-//   try {
-//     const employeeId = Number(request.params.id);
-
-//     const deleteEmployee = db.transaction((id) => {
-//       db.prepare(
-//         `
-//         DELETE FROM logs
-//         WHERE employee_id = ?
-//       `,
-//       ).run(id);
-
-//       return db
-//         .prepare(
-//           `
-//           DELETE FROM employees
-//           WHERE id = ?
-//         `,
-//         )
-//         .run(id);
-//     });
-
-//     const result = deleteEmployee(employeeId);
-
-//     if (result.changes === 0) {
-//       return response.status(404).json({
-//         error: "Không tìm thấy nhân viên.",
-//       });
-//     }
-
-//     response.json({
-//       ok: true,
-//       message: "Đã xóa nhân viên và toàn bộ dòng công.",
-//     });
-//   } catch (error) {
-//     response.status(400).json({
-//       error: error.message,
-//     });
-//   }
-// });
-
-// export default router;
 import express from "express";
-import db from "../database.js";
+import { getDb } from "../database.js";
 import { toNumber } from "../payroll.js";
 
 const router = express.Router();
+
+function formatEmployee(employee) {
+  return {
+    ...employee,
+
+    // Giữ API frontend cũ: employee.id vẫn là số.
+    id: employee.postgres_id,
+
+    // Không cần gửi _id ObjectId cho frontend hiện tại.
+    _id: undefined,
+  };
+}
 
 /**
  * GET /api/employees
@@ -162,13 +22,17 @@ const router = express.Router();
  */
 router.get("/", async (request, response) => {
   try {
-    const result = await db.query(`
-      SELECT *
-      FROM employees
-      ORDER BY name
-    `);
+    const db = getDb();
 
-    response.json(result.rows);
+    const employees = await db
+      .collection("employees")
+      .find({})
+      .sort({
+        name: 1,
+      })
+      .toArray();
+
+    response.json(employees.map(formatEmployee));
   } catch (error) {
     response.status(500).json({
       error: error.message,
@@ -201,29 +65,44 @@ router.post("/", async (request, response) => {
       throw new Error("Đơn giá giờ không được âm.");
     }
 
-    const result = await db.query(
-      `
-        INSERT INTO employees (
-          name,
-          meso_hour,
-          hourly_rate
-        )
-        VALUES ($1, $2, $3)
-        RETURNING id
-      `,
-      [
-        employeeName,
-        mesoPerHour,
-        hourlyRate,
-      ],
-    );
+    const db = getDb();
+    const employees = db.collection("employees");
+
+    const lastEmployee = await employees
+      .find({})
+      .sort({
+        postgres_id: -1,
+      })
+      .limit(1)
+      .toArray();
+
+    const nextEmployeeId =
+      lastEmployee.length > 0
+        ? Number(lastEmployee[0].postgres_id) + 1
+        : 1;
+
+    const result = await employees.insertOne({
+      postgres_id: nextEmployeeId,
+      name: employeeName,
+      meso_hour: mesoPerHour,
+      hourly_rate: hourlyRate,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
 
     response.status(201).json({
       ok: true,
-      employee_id: result.rows[0].id,
+      employee_id: nextEmployeeId,
+      mongo_id: result.insertedId.toString(),
       message: "Đã thêm nhân viên.",
     });
   } catch (error) {
+    if (error.code === 11000) {
+      return response.status(400).json({
+        error: "Tên nhân viên đã tồn tại.",
+      });
+    }
+
     response.status(400).json({
       error: error.message,
     });
@@ -238,6 +117,10 @@ router.patch("/:id", async (request, response) => {
   try {
     const employeeId = Number(request.params.id);
 
+    if (!employeeId) {
+      throw new Error("ID nhân viên không hợp lệ.");
+    }
+
     const { meso_hour, hourly_rate } = request.body;
 
     const mesoPerHour = toNumber(meso_hour);
@@ -251,23 +134,22 @@ router.patch("/:id", async (request, response) => {
       throw new Error("Đơn giá giờ không được âm.");
     }
 
-    const result = await db.query(
-      `
-        UPDATE employees
-        SET
-          meso_hour = $1,
-          hourly_rate = $2
-        WHERE id = $3
-        RETURNING id
-      `,
-      [
-        mesoPerHour,
-        hourlyRate,
-        employeeId,
-      ],
+    const db = getDb();
+
+    const result = await db.collection("employees").updateOne(
+      {
+        postgres_id: employeeId,
+      },
+      {
+        $set: {
+          meso_hour: mesoPerHour,
+          hourly_rate: hourlyRate,
+          updatedAt: new Date(),
+        },
+      },
     );
 
-    if (result.rowCount === 0) {
+    if (result.matchedCount === 0) {
       return response.status(404).json({
         error: "Không tìm thấy nhân viên.",
       });
@@ -286,27 +168,41 @@ router.patch("/:id", async (request, response) => {
 
 /**
  * DELETE /api/employees/:id
- * Xóa nhân viên. Các dòng công sẽ tự bị xóa
- * vì bảng PostgreSQL đã dùng ON DELETE CASCADE.
+ * Xóa nhân viên và tất cả dòng công liên quan.
  */
 router.delete("/:id", async (request, response) => {
   try {
     const employeeId = Number(request.params.id);
 
-    const result = await db.query(
-      `
-        DELETE FROM employees
-        WHERE id = $1
-        RETURNING id
-      `,
-      [employeeId],
-    );
+    if (!employeeId) {
+      throw new Error("ID nhân viên không hợp lệ.");
+    }
 
-    if (result.rowCount === 0) {
+    const db = getDb();
+    const employees = db.collection("employees");
+    const logs = db.collection("logs");
+
+    const employee = await employees.findOne({
+      postgres_id: employeeId,
+    });
+
+    if (!employee) {
       return response.status(404).json({
         error: "Không tìm thấy nhân viên.",
       });
     }
+
+    /*
+      MongoDB không có ON DELETE CASCADE tự động như PostgreSQL.
+      Vì vậy phải xóa logs trước, rồi xóa employee.
+    */
+    await logs.deleteMany({
+      employee_id: employee._id,
+    });
+
+    await employees.deleteOne({
+      _id: employee._id,
+    });
 
     response.json({
       ok: true,

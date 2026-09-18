@@ -1,254 +1,5 @@
-// import express from "express";
-// import db from "../database.js";
-// import { toNumber, calculateSalary } from "../payroll.js";
-
-// const router = express.Router();
-
-// router.get("/", (request, response) => {
-//   try {
-//     const employeeId = Number(request.query.employee_id);
-//     const month = request.query.month;
-
-//     if (!employeeId) {
-//       throw new Error("Thiếu employee_id.");
-//     }
-
-//     if (!month) {
-//       throw new Error("Thiếu tháng cần xem.");
-//     }
-
-//     const logs = db
-//       .prepare(
-//         `
-//         SELECT *
-//         FROM logs
-//         WHERE employee_id = ?
-//           AND substr(work_date, 1, 7) = ?
-//         ORDER BY work_date DESC, id DESC
-//       `,
-//       )
-//       .all(employeeId, month);
-
-//     const calculatedLogs = logs.map(calculateSalary);
-
-//     response.json(calculatedLogs);
-//   } catch (error) {
-//     response.status(400).json({
-//       error: error.message,
-//     });
-//   }
-// });
-// router.patch("/:id/unpaid", (request, response) => {
-//   try {
-//     const logId = Number(request.params.id);
-
-//     const result = db
-//       .prepare(
-//         `
-//         UPDATE logs
-//         SET
-//           is_paid = 0,
-//           paid_at = NULL
-//         WHERE id = ?
-//       `,
-//       )
-//       .run(logId);
-
-//     if (result.changes === 0) {
-//       return response.status(404).json({
-//         error: "Không tìm thấy dòng công.",
-//       });
-//     }
-
-//     response.json({
-//       ok: true,
-//       message: "Đã chuyển dòng công về trạng thái chưa trả.",
-//     });
-//   } catch (error) {
-//     response.status(400).json({
-//       error: error.message,
-//     });
-//   }
-// });
-// router.patch("/mark-paid", (request, response) => {
-//   try {
-//     const { employee_id, log_ids } = request.body;
-
-//     const employeeId = Number(employee_id);
-
-//     if (!employeeId) {
-//       throw new Error("Thiếu employee_id.");
-//     }
-
-//     if (!Array.isArray(log_ids) || log_ids.length === 0) {
-//       throw new Error("Vui lòng chọn ít nhất một ngày công.");
-//     }
-
-//     const logIds = log_ids.map((id) => Number(id));
-
-//     const placeholders = logIds.map(() => "?").join(", ");
-
-//     const updatePaidLogs = db.prepare(`
-//       UPDATE logs
-//       SET
-//         is_paid = 1,
-//         paid_at = datetime('now', 'localtime')
-//       WHERE employee_id = ?
-//         AND id IN (${placeholders})
-//         AND is_paid = 0
-//     `);
-
-//     const result = updatePaidLogs.run(employeeId, ...logIds);
-
-//     response.json({
-//       ok: true,
-//       updated_count: result.changes,
-//       message: `Đã đánh dấu trả lương cho ${result.changes} ngày công.`,
-//     });
-//   } catch (error) {
-//     response.status(400).json({
-//       error: error.message,
-//     });
-//   }
-// });
-// router.post("/", (request, response) => {
-//   try {
-//     const data = request.body;
-
-//     const employeeId = Number(data.employee_id);
-
-//     const employee = db
-//       .prepare(
-//         `
-//         SELECT *
-//         FROM employees
-//         WHERE id = ?
-//       `,
-//       )
-//       .get(employeeId);
-
-//     if (!employee) {
-//       throw new Error("Không tìm thấy nhân viên.");
-//     }
-
-//     if (!data.work_date) {
-//       throw new Error("Vui lòng chọn ngày làm.");
-//     }
-
-//     if (!data.shift) {
-//       throw new Error("Vui lòng chọn ca làm.");
-//     }
-
-//     const mesoStart = toNumber(data.meso_start);
-//     const mesoEnd = toNumber(data.meso_end);
-
-//     const pinkPotStart = toNumber(data.pink_pot_start);
-//     const pinkPotEnd = toNumber(data.pink_pot_end);
-//     const pinkPotPrice = toNumber(data.pink_pot_price);
-
-//     const purplePotStart = toNumber(data.purple_pot_start);
-//     const purplePotEnd = toNumber(data.purple_pot_end);
-//     const purplePotPrice = toNumber(data.purple_pot_price);
-
-//     const result = db
-//       .prepare(
-//         `
-//         INSERT INTO logs (
-//           employee_id,
-//           work_date,
-//           shift,
-
-//           meso_start,
-//           meso_end,
-
-//           pot_start,
-//           pot_end,
-//           pot_price,
-
-//           pink_pot_start,
-//           pink_pot_end,
-//           pink_pot_price,
-
-//           purple_pot_start,
-//           purple_pot_end,
-//           purple_pot_price,
-
-//           meso_hour,
-//           hourly_rate
-//         )
-//         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-//       `,
-//       )
-//       .run(
-//         employee.id,
-//         data.work_date,
-//         data.shift,
-
-//         mesoStart,
-//         mesoEnd,
-
-//         // Pot cũ gán 0 để tương thích database cũ.
-//         0,
-//         0,
-//         0,
-
-//         pinkPotStart,
-//         pinkPotEnd,
-//         pinkPotPrice,
-
-//         purplePotStart,
-//         purplePotEnd,
-//         purplePotPrice,
-
-//         employee.meso_hour,
-//         employee.hourly_rate,
-//       );
-
-//     response.status(201).json({
-//       ok: true,
-//       log_id: result.lastInsertRowid,
-//       message: "Đã lưu dòng công.",
-//     });
-//   } catch (error) {
-//     response.status(400).json({
-//       error: error.message,
-//     });
-//   }
-// });
-
-// router.delete("/:id", (request, response) => {
-//   try {
-//     const logId = Number(request.params.id);
-
-//     const result = db
-//       .prepare(
-//         `
-//         DELETE FROM logs
-//         WHERE id = ?
-//       `,
-//       )
-//       .run(logId);
-
-//     if (result.changes === 0) {
-//       return response.status(404).json({
-//         error: "Không tìm thấy dòng công.",
-//       });
-//     }
-
-//     response.json({
-//       ok: true,
-//       message: "Đã xóa dòng công.",
-//     });
-//   } catch (error) {
-//     response.status(400).json({
-//       error: error.message,
-//     });
-//   }
-// });
-
-// export default router;
 import express from "express";
-import db from "../database.js";
+import { getDb } from "../database.js";
 
 import {
   toNumber,
@@ -256,6 +7,26 @@ import {
 } from "../payroll.js";
 
 const router = express.Router();
+
+function formatLog(log) {
+  return {
+    ...log,
+
+    /*
+      Giữ id là số để frontend cũ không phải đổi.
+      postgres_id chính là id cũ của PostgreSQL/migration.
+    */
+    id: log.postgres_id,
+
+    /*
+      Frontend cũ đang gửi employee_id dạng số.
+      Trả về postgres_id của nhân viên thay vì ObjectId.
+    */
+    employee_id: log.employee_postgres_id,
+
+    _id: undefined,
+  };
+}
 
 /**
  * GET /api/logs?employee_id=1&month=2026-08
@@ -274,21 +45,37 @@ router.get("/", async (request, response) => {
       throw new Error("Thiếu tháng cần xem.");
     }
 
-    const result = await db.query(
-      `
-        SELECT *
-        FROM logs
-        WHERE employee_id = $1
-          AND substring(work_date FROM 1 FOR 7) = $2
-        ORDER BY work_date DESC, id DESC
-      `,
-      [
-        employeeId,
-        month,
-      ],
-    );
+    const db = getDb();
 
-    const calculatedLogs = result.rows.map(calculateSalary);
+    const employee = await db.collection("employees").findOne({
+      postgres_id: employeeId,
+    });
+
+    if (!employee) {
+      throw new Error("Không tìm thấy nhân viên.");
+    }
+
+    const logs = await db.collection("logs")
+      .find({
+        employee_id: employee._id,
+
+        /*
+          work_date có dạng YYYY-MM-DD.
+          Regex này thay thế substring(work_date, 1, 7) SQL.
+        */
+        work_date: {
+          $regex: `^${month}`,
+        },
+      })
+      .sort({
+        work_date: -1,
+        postgres_id: -1,
+      })
+      .toArray();
+
+    const calculatedLogs = logs
+      .map(formatLog)
+      .map(calculateSalary);
 
     response.json(calculatedLogs);
   } catch (error) {
@@ -308,39 +95,74 @@ router.patch("/mark-paid", async (request, response) => {
 
     const employeeId = Number(employee_id);
 
-    if (!employeeId) {
-      throw new Error("Thiếu employee_id.");
+    if (!Number.isInteger(employeeId) || employeeId <= 0) {
+      throw new Error("Thiếu hoặc sai employee_id.");
     }
 
     if (!Array.isArray(log_ids) || log_ids.length === 0) {
       throw new Error("Vui lòng chọn ít nhất một ngày công.");
     }
 
-    const logIds = log_ids.map((id) => Number(id));
+    const logIds = log_ids
+      .map((id) => Number(id))
+      .filter((id) => Number.isInteger(id) && id > 0);
 
-    const result = await db.query(
-      `
-        UPDATE logs
-        SET
-          is_paid = 1,
-          paid_at = CURRENT_TIMESTAMP::TEXT
-        WHERE employee_id = $1
-          AND id = ANY($2::int[])
-          AND is_paid = 0
-        RETURNING id
-      `,
-      [
-        employeeId,
-        logIds,
-      ],
+    if (logIds.length === 0) {
+      throw new Error("Danh sách log_ids không hợp lệ.");
+    }
+
+    const db = getDb();
+
+    const employee = await db.collection("employees").findOne({
+      postgres_id: employeeId,
+    });
+
+    if (!employee) {
+      return response.status(404).json({
+        error: "Không tìm thấy nhân viên.",
+      });
+    }
+
+    /*
+      Dữ liệu cũ đã migrate có:
+      - logs.employee_id: ObjectId của employee MongoDB
+      - logs.postgres_id: id số cũ của PostgreSQL
+
+      Vì vậy phải query bằng employee._id + postgres_id.
+    */
+    const result = await db.collection("logs").updateMany(
+      {
+        employee_id: employee._id,
+        postgres_id: {
+          $in: logIds,
+        },
+        is_paid: {
+          $ne: true,
+        },
+      },
+      {
+        $set: {
+          is_paid: true,
+          paid_at: new Date().toISOString(),
+          updatedAt: new Date(),
+        },
+      },
     );
 
     response.json({
       ok: true,
-      updated_count: result.rowCount,
-      message: `Đã đánh dấu trả lương cho ${result.rowCount} ngày công.`,
+
+      matched_count: result.matchedCount,
+      updated_count: result.modifiedCount,
+
+      message:
+        result.modifiedCount > 0
+          ? `Đã đánh dấu trả lương cho ${result.modifiedCount} ngày công.`
+          : "Không có dòng công chưa trả phù hợp để cập nhật.",
     });
   } catch (error) {
+    console.error("Lỗi mark-paid:", error);
+
     response.status(400).json({
       error: error.message,
     });
@@ -355,19 +177,26 @@ router.patch("/:id/unpaid", async (request, response) => {
   try {
     const logId = Number(request.params.id);
 
-    const result = await db.query(
-      `
-        UPDATE logs
-        SET
-          is_paid = 0,
-          paid_at = NULL
-        WHERE id = $1
-        RETURNING id
-      `,
-      [logId],
+    if (!logId) {
+      throw new Error("ID dòng công không hợp lệ.");
+    }
+
+    const db = getDb();
+
+    const result = await db.collection("logs").updateOne(
+      {
+        postgres_id: logId,
+      },
+      {
+        $set: {
+          is_paid: false,
+          paid_at: null,
+          updatedAt: new Date(),
+        },
+      },
     );
 
-    if (result.rowCount === 0) {
+    if (result.matchedCount === 0) {
       return response.status(404).json({
         error: "Không tìm thấy dòng công.",
       });
@@ -394,16 +223,15 @@ router.post("/", async (request, response) => {
 
     const employeeId = Number(data.employee_id);
 
-    const employeeResult = await db.query(
-      `
-        SELECT *
-        FROM employees
-        WHERE id = $1
-      `,
-      [employeeId],
-    );
+    if (!employeeId) {
+      throw new Error("Thiếu employee_id.");
+    }
 
-    const employee = employeeResult.rows[0];
+    const db = getDb();
+
+    const employee = await db.collection("employees").findOne({
+      postgres_id: employeeId,
+    });
 
     if (!employee) {
       throw new Error("Không tìm thấy nhân viên.");
@@ -420,85 +248,87 @@ router.post("/", async (request, response) => {
     const mesoStart = toNumber(data.meso_start);
     const mesoEnd = toNumber(data.meso_end);
 
-    const pinkPotStart = toNumber(data.pink_pot_start);
-    const pinkPotEnd = toNumber(data.pink_pot_end);
-    const pinkPotPrice = toNumber(data.pink_pot_price);
+    const potStart = toNumber(data.pot_start ?? 0);
+    const potEnd = toNumber(data.pot_end ?? 0);
+    const potPrice = toNumber(data.pot_price ?? 0);
 
-    const purplePotStart = toNumber(data.purple_pot_start);
-    const purplePotEnd = toNumber(data.purple_pot_end);
-    const purplePotPrice = toNumber(data.purple_pot_price);
+    const pinkPotStart = toNumber(data.pink_pot_start ?? 0);
+    const pinkPotEnd = toNumber(data.pink_pot_end ?? 0);
+    const pinkPotPrice = toNumber(data.pink_pot_price ?? 0);
 
-    const result = await db.query(
-      `
-        INSERT INTO logs (
-          employee_id,
-          work_date,
-          shift,
+    const purplePotStart = toNumber(data.purple_pot_start ?? 0);
+    const purplePotEnd = toNumber(data.purple_pot_end ?? 0);
+    const purplePotPrice = toNumber(data.purple_pot_price ?? 0);
 
-          meso_start,
-          meso_end,
+    const eelStart = toNumber(data.eel_start ?? 0);
+    const eelEnd = toNumber(data.eel_end ?? 0);
+    const eelPrice = toNumber(data.eel_price ?? 0);
 
-          pot_start,
-          pot_end,
-          pot_price,
+    const logs = db.collection("logs");
 
-          pink_pot_start,
-          pink_pot_end,
-          pink_pot_price,
+    /*
+      Để frontend cũ tiếp tục dùng log.id kiểu số,
+      tự sinh postgres_id mới lớn hơn id cũ lớn nhất.
+    */
+    const lastLog = await logs
+      .find({})
+      .sort({
+        postgres_id: -1,
+      })
+      .limit(1)
+      .toArray();
 
-          purple_pot_start,
-          purple_pot_end,
-          purple_pot_price,
+    const nextLogId =
+      lastLog.length > 0
+        ? Number(lastLog[0].postgres_id) + 1
+        : 1;
 
-          meso_hour,
-          hourly_rate,
+    const result = await logs.insertOne({
+      postgres_id: nextLogId,
 
-          is_paid,
-          paid_at
-        )
-        VALUES (
-          $1, $2, $3,
-          $4, $5,
-          $6, $7, $8,
-          $9, $10, $11,
-          $12, $13, $14,
-          $15, $16,
-          $17, $18
-        )
-        RETURNING id
-      `,
-      [
-        employee.id,
-        data.work_date,
-        data.shift,
+      employee_id: employee._id,
+      employee_postgres_id: employee.postgres_id,
 
-        mesoStart,
-        mesoEnd,
+      work_date: data.work_date,
+      shift: data.shift,
 
-        // Các cột Pot cũ giữ giá trị 0.
-        0,
-        0,
-        0,
+      meso_start: mesoStart,
+      meso_end: mesoEnd,
 
-        pinkPotStart,
-        pinkPotEnd,
-        pinkPotPrice,
+      pot_start: potStart,
+      pot_end: potEnd,
+      pot_price: potPrice,
 
-        purplePotStart,
-        purplePotEnd,
-        purplePotPrice,
+      pink_pot_start: pinkPotStart,
+      pink_pot_end: pinkPotEnd,
+      pink_pot_price: pinkPotPrice,
 
-        employee.meso_hour,
-        employee.hourly_rate,
+      purple_pot_start: purplePotStart,
+      purple_pot_end: purplePotEnd,
+      purple_pot_price: purplePotPrice,
 
-        0,
-        null,
-      ],
-    );
+      eel_start: eelStart,
+      eel_end: eelEnd,
+      eel_price: eelPrice,
+
+      /*
+        Lưu KPI/lương tại thời điểm tạo dòng công.
+        Sau này sửa employee thì log cũ không bị đổi lương.
+      */
+      meso_hour: toNumber(employee.meso_hour),
+      hourly_rate: toNumber(employee.hourly_rate),
+
+      is_paid: false,
+      paid_at: null,
+
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
 
     response.status(201).json({
       ok: true,
-      log_id: result.rows[0].id,
+      log_id: nextLogId,
+      mongo_id: result.insertedId.toString(),
       message: "Đã lưu dòng công.",
     });
   } catch (error) {
@@ -516,16 +346,17 @@ router.delete("/:id", async (request, response) => {
   try {
     const logId = Number(request.params.id);
 
-    const result = await db.query(
-      `
-        DELETE FROM logs
-        WHERE id = $1
-        RETURNING id
-      `,
-      [logId],
-    );
+    if (!logId) {
+      throw new Error("ID dòng công không hợp lệ.");
+    }
 
-    if (result.rowCount === 0) {
+    const db = getDb();
+
+    const result = await db.collection("logs").deleteOne({
+      postgres_id: logId,
+    });
+
+    if (result.deletedCount === 0) {
       return response.status(404).json({
         error: "Không tìm thấy dòng công.",
       });
